@@ -50,6 +50,8 @@
 
 ---
 
-## ライセンス
+## サポート
 
-`AGPL-3.0`
+このプロジェクトが役に立ったら、⭐ Star をお願いします！
+
+バグやご提案がありましたら、[Issue](https://github.com/zmabin/OpenList_Chunk/issues) をご投稿ください。

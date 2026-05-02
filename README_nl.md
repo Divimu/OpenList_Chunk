@@ -50,6 +50,8 @@ Zie de [Chinese README](./README.md) of [Engelse README](./README_en.md) voor vo
 
 ---
 
-## Licentie
+## Ondersteuning
 
-`AGPL-3.0`
+Als dit project je helpt, geef het dan een ⭐ Star!
+
+Bug gevonden of een suggestie? Open gerust een [Issue](https://github.com/zmabin/OpenList_Chunk/issues).

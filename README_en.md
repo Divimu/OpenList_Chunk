@@ -145,6 +145,8 @@ This project references and builds upon the work of the following excellent proj
 
 ---
 
-## License
+## Support
 
-`OpenList_Chunk` is open-sourced under the [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.txt) license.
+If this project helps you, please consider giving it a ⭐ Star!
+
+Found a bug or have a suggestion? Feel free to open an [Issue](https://github.com/zmabin/OpenList_Chunk/issues).

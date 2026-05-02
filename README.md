@@ -155,6 +155,8 @@ proxy_send_timeout 86400s;           # 24小时超时
 
 ---
 
-## 许可证
+## 支持
 
-`OpenList_Chunk` 基于 [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.txt) 许可证开源。
+如果这个项目对你有帮助，请给个 ⭐ Star 支持一下！
+
+遇到问题或有建议？欢迎提交 [Issue](https://github.com/zmabin/OpenList_Chunk/issues)。
