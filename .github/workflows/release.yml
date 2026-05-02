@@ -1,0 +1,141 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v1.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            name: linux-amd64
+          - goos: linux
+            goarch: arm64
+            name: linux-arm64
+          - goos: darwin
+            goarch: amd64
+            name: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            name: darwin-arm64
+          - goos: windows
+            goarch: amd64
+            name: windows-amd64
+            ext: .exe
+          - goos: windows
+            goarch: arm64
+            name: windows-arm64
+            ext: .exe
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.0"
+
+      - name: Download frontend
+        run: |
+          FRONTEND_REPO="OpenListTeam/OpenList-Frontend"
+          AUTH_HEADER=""
+          if [ -n "${{ secrets.GITHUB_TOKEN }}" ]; then
+            AUTH_HEADER="-H \"Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}\""
+          fi
+          RELEASE_JSON=$(eval "curl -fsSL --max-time 10 $AUTH_HEADER -H \"Accept: application/vnd.github.v3+json\" \"https://api.github.com/repos/${FRONTEND_REPO}/releases/tags/rolling\"" 2>/dev/null)
+          if [ -z "$RELEASE_JSON" ] || echo "$RELEASE_JSON" | grep -q "Not Found"; then
+            RELEASE_JSON=$(eval "curl -fsSL --max-time 10 $AUTH_HEADER -H \"Accept: application/vnd.github.v3+json\" \"https://api.github.com/repos/${FRONTEND_REPO}/releases/latest\"")
+          fi
+          TAR_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[].browser_download_url // empty' | grep "openlist-frontend-dist" | grep -v "lite" | grep "\.tar\.gz$" | head -1)
+          if [ -z "$TAR_URL" ]; then
+            mkdir -p public/dist
+          else
+            curl -fsSL "$TAR_URL" -o dist.tar.gz
+            rm -rf public/dist && mkdir -p public/dist
+            tar -xzf dist.tar.gz -C public/dist
+            rm -rf dist.tar.gz
+          fi
+
+      - name: Build binary
+        run: |
+          export GOOS=${{ matrix.goos }}
+          export GOARCH=${{ matrix.goarch }}
+          export CGO_ENABLED=0
+
+          BUILT_AT="$(date +'%F %T %z')"
+          GIT_COMMIT="$(git log --pretty=format:'%h' -1 2>/dev/null || echo 'unknown')"
+          VERSION="${GITHUB_REF_NAME}"
+          WEB_VERSION="rolling"
+
+          LDFLAGS="-w -s \
+            -X 'github.com/OpenListTeam/OpenList/v4/internal/conf.BuiltAt=${BUILT_AT}' \
+            -X 'github.com/OpenListTeam/OpenList/v4/internal/conf.GitAuthor=OpenList_Chunk Contributors' \
+            -X 'github.com/OpenListTeam/OpenList/v4/internal/conf.GitCommit=${GIT_COMMIT}' \
+            -X 'github.com/OpenListTeam/OpenList/v4/internal/conf.Version=${VERSION}' \
+            -X 'github.com/OpenListTeam/OpenList/v4/internal/conf.WebVersion=${WEB_VERSION}' \
+          "
+          mkdir -p dist
+          go build -ldflags="$LDFLAGS" -tags=jsoniter -o "dist/openlist-${{ matrix.name }}${{ matrix.ext }}" .
+
+      - name: Generate checksum
+        run: |
+          cd dist
+          sha256sum openlist-${{ matrix.name }}* > openlist-${{ matrix.name }}.sha256
+          cat openlist-${{ matrix.name }}.sha256
+
+      - name: Upload release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: openlist-${{ matrix.name }}
+          path: dist/*
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: |
+            ## OpenList_Chunk ${{ github.ref_name }}
+
+            Auto-built from OpenList upstream with chunk upload support.
+
+            ### Files
+            - **openlist-linux-amd64** — Linux x86_64
+            - **openlist-linux-arm64** — Linux ARM64
+            - **openlist-darwin-amd64** — macOS Intel
+            - **openlist-darwin-arm64** — macOS Apple Silicon
+            - **openlist-windows-amd64.exe** — Windows x86_64
+            - **openlist-windows-arm64.exe** — Windows ARM64
+          files: release-assets/**/*
+          draft: true
+          prerelease: false
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
