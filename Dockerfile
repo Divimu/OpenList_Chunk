@@ -34,7 +34,7 @@ RUN go mod download
 
 COPY ./ ./
 
-RUN CGO_ENABLED=0 go build \
+RUN go mod tidy && CGO_ENABLED=0 go build \
     -ldflags="-w -s" \
     -tags=jsoniter \
     -o /build/openlist .
