@@ -15,65 +15,93 @@ concurrency:
 
 jobs:
   build:
+    name: Build ${{ matrix.name }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        target:
-          - darwin-amd64
-          - darwin-arm64
-          - windows-amd64
-          - linux-arm64-musl
-          - linux-amd64-musl
-          - windows-arm64
-          - android-arm64
-    name: Build ${{ matrix.target }}
-    runs-on: ubuntu-latest
+        include:
+          - goos: linux
+            goarch: amd64
+            name: linux-amd64
+          - goos: linux
+            goarch: arm64
+            name: linux-arm64
+          - goos: darwin
+            goarch: amd64
+            name: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            name: darwin-arm64
+          - goos: windows
+            goarch: amd64
+            name: windows-amd64
+            ext: .exe
+          - goos: windows
+            goarch: arm64
+            name: windows-arm64
+            ext: .exe
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
-      - uses: benjlevesque/short-sha@v3.0
-        id: short-sha
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: "1.25.0"
 
-      - name: Setup web
-        run: bash build.sh dev web
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          FRONTEND_REPO: ${{ vars.FRONTEND_REPO }}
-
-      - name: Build
-        uses: OpenListTeam/cgo-actions@v1.2.2
-        with:
-          targets: ${{ matrix.target }}
-          flags: ${{ contains(matrix.target, '-musl') && '-ldflags=-linkmode external -extldflags ''-static -fpic''' || '-ldflags=' }}
-          static-link-for-musl: true
-          musl-target-format: $os-$musl-$arch
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          out-dir: build
-          x-flags: |
-            github.com/OpenListTeam/OpenList/v4/internal/conf.BuiltAt=$built_at
-            github.com/OpenListTeam/OpenList/v4/internal/conf.GitAuthor=The OpenList Projects Contributors <noreply@openlist.team>
-            github.com/OpenListTeam/OpenList/v4/internal/conf.GitCommit=$git_commit
-            github.com/OpenListTeam/OpenList/v4/internal/conf.Version=$tag
-            github.com/OpenListTeam/OpenList/v4/internal/conf.WebVersion=rolling
-          output: openlist$ext
-
-      - name: Verify musl binary is static
-        if: contains(matrix.target, '-musl')
+      - name: Download frontend
         run: |
-          set -e
-          if readelf -l build/openlist | grep -q "Requesting program interpreter"; then
-            echo "Dynamic binary detected: build/openlist"
-            readelf -l build/openlist | grep "Requesting program interpreter" || true
-            exit 1
+          echo "Downloading frontend from upstream..."
+          FRONTEND_REPO="${FRONTEND_REPO:-OpenListTeam/OpenList-Frontend}"
+          GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}"
+          AUTH_ARGS=""
+          if [ -n "$GITHUB_TOKEN" ]; then
+            AUTH_ARGS="-H \"Authorization: Bearer $GITHUB_TOKEN\""
           fi
+
+          # Try rolling tag first (dev), fall back to latest release
+          eval "curl -fsSL --max-time 10 $AUTH_ARGS -H \"Accept: application/vnd.github.v3+json\" \"https://api.github.com/repos/\$FRONTEND_REPO/releases/tags/rolling\"" 2>/dev/null || eval "curl -fsSL --max-time 10 $AUTH_ARGS -H \"Accept: application/vnd.github.v3+json\" \"https://api.github.com/repos/\$FRONTEND_REPO/releases/latest\"" > release.json
+
+          TAR_URL=$(cat release.json | jq -r '.assets[].browser_download_url' | grep "openlist-frontend-dist" | grep -v "lite" | grep "\.tar\.gz$" | head -1)
+          if [ -z "$TAR_URL" ]; then
+            echo "No frontend dist found, skipping frontend download"
+            mkdir -p public/dist
+          else
+            echo "Downloading frontend from: $TAR_URL"
+            curl -fsSL "$TAR_URL" -o dist.tar.gz
+            rm -rf public/dist && mkdir -p public/dist
+            tar -zxvf dist.tar.gz -C public/dist
+            rm -rf dist.tar.gz
+            echo "Frontend downloaded successfully"
+          fi
+
+      - name: Build binary
+        run: |
+          export GOOS=${{ matrix.goos }}
+          export GOARCH=${{ matrix.goarch }}
+          export CGO_ENABLED=0
+
+          BUILT_AT="$(date +'%F %T %z')"
+          GIT_COMMIT="$(git log --pretty=format:'%h' -1 2>/dev/null || echo 'unknown')"
+          GIT_AUTHOR="OpenList_Chunk Contributors"
+          VERSION="$(git describe --abbrev=0 --tags 2>/dev/null || echo 'v0.0.0')"
+          WEB_VERSION="rolling"
+
+          LDFLAGS="-w -s \
+            -X 'github.com/OpenListTeam/OpenList/v4/internal/conf.BuiltAt=${BUILT_AT}' \
+            -X 'github.com/OpenListTeam/OpenList/v4/internal/conf.GitAuthor=${GIT_AUTHOR}' \
+            -X 'github.com/OpenListTeam/OpenList/v4/internal/conf.GitCommit=${GIT_COMMIT}' \
+            -X 'github.com/OpenListTeam/OpenList/v4/internal/conf.Version=${VERSION}' \
+            -X 'github.com/OpenListTeam/OpenList/v4/internal/conf.WebVersion=${WEB_VERSION}' \
+          "
+          echo "Building for $GOOS/$GOARCH ..."
+          mkdir -p build
+          go build -ldflags="$LDFLAGS" -tags=jsoniter -o "build/openlist-${{ matrix.name }}${{ matrix.ext }}" .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: openlist_${{ steps.short-sha.outputs.sha }}_${{ matrix.target }}
+          name: openlist_${{ github.sha }}_${{ matrix.name }}
           path: build/*
