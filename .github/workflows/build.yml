@@ -49,7 +49,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25.0"
+          go-version-file: go.mod
 
       - name: Download frontend
         run: |
@@ -102,6 +102,11 @@ jobs:
           echo "Building for $GOOS/$GOARCH ..."
           mkdir -p build
           go build -ldflags="$LDFLAGS" -tags=jsoniter -o "build/openlist-${{ matrix.name }}${{ matrix.ext }}" .
+
+      - name: Verify binary
+        run: |
+          file build/openlist-${{ matrix.name }}${{ matrix.ext }}
+          ls -lh build/openlist-${{ matrix.name }}${{ matrix.ext }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

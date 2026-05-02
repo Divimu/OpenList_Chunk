@@ -50,7 +50,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25.0"
+          go-version-file: go.mod
 
       - name: Download frontend
         run: |
@@ -93,6 +93,11 @@ jobs:
           "
           mkdir -p dist
           go build -ldflags="$LDFLAGS" -tags=jsoniter -o "dist/openlist-${{ matrix.name }}${{ matrix.ext }}" .
+
+      - name: Verify binary
+        run: |
+          file dist/openlist-${{ matrix.name }}${{ matrix.ext }}
+          ls -lh dist/openlist-${{ matrix.name }}${{ matrix.ext }}
 
       - name: Generate checksum
         run: |
