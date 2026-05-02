@@ -54,25 +54,28 @@ jobs:
       - name: Download frontend
         run: |
           echo "Downloading frontend from upstream..."
-          FRONTEND_REPO="${FRONTEND_REPO:-OpenListTeam/OpenList-Frontend}"
-          GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}"
-          AUTH_ARGS=""
-          if [ -n "$GITHUB_TOKEN" ]; then
-            AUTH_ARGS="-H \"Authorization: Bearer $GITHUB_TOKEN\""
+          FRONTEND_REPO="OpenListTeam/OpenList-Frontend"
+          AUTH_HEADER=""
+          if [ -n "${{ secrets.GITHUB_TOKEN }}" ]; then
+            AUTH_HEADER="-H \"Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}\""
           fi
 
-          # Try rolling tag first (dev), fall back to latest release
-          eval "curl -fsSL --max-time 10 $AUTH_ARGS -H \"Accept: application/vnd.github.v3+json\" \"https://api.github.com/repos/\$FRONTEND_REPO/releases/tags/rolling\"" 2>/dev/null || eval "curl -fsSL --max-time 10 $AUTH_ARGS -H \"Accept: application/vnd.github.v3+json\" \"https://api.github.com/repos/\$FRONTEND_REPO/releases/latest\"" > release.json
+          # Try rolling tag first, fall back to latest release
+          RELEASE_JSON=$(eval "curl -fsSL --max-time 10 $AUTH_HEADER -H \"Accept: application/vnd.github.v3+json\" \"https://api.github.com/repos/${FRONTEND_REPO}/releases/tags/rolling\"" 2>/dev/null)
+          if [ -z "$RELEASE_JSON" ] || echo "$RELEASE_JSON" | grep -q "Not Found"; then
+            echo "Rolling release not found, trying latest..."
+            RELEASE_JSON=$(eval "curl -fsSL --max-time 10 $AUTH_HEADER -H \"Accept: application/vnd.github.v3+json\" \"https://api.github.com/repos/${FRONTEND_REPO}/releases/latest\"")
+          fi
 
-          TAR_URL=$(cat release.json | jq -r '.assets[].browser_download_url' | grep "openlist-frontend-dist" | grep -v "lite" | grep "\.tar\.gz$" | head -1)
+          TAR_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[].browser_download_url // empty' | grep "openlist-frontend-dist" | grep -v "lite" | grep "\.tar\.gz$" | head -1)
           if [ -z "$TAR_URL" ]; then
             echo "No frontend dist found, skipping frontend download"
             mkdir -p public/dist
           else
-            echo "Downloading frontend from: $TAR_URL"
+            echo "Downloading frontend dist..."
             curl -fsSL "$TAR_URL" -o dist.tar.gz
             rm -rf public/dist && mkdir -p public/dist
-            tar -zxvf dist.tar.gz -C public/dist
+            tar -xzf dist.tar.gz -C public/dist
             rm -rf dist.tar.gz
             echo "Frontend downloaded successfully"
           fi

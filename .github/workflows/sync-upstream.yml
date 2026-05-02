@@ -43,6 +43,7 @@ jobs:
             "pkg/cron/cron.go"
             "pkg/cron/cron_test.go"
             "conf.d/openlist.conf"
+            "go.mod"
           )
 
           # Try a clean merge first
@@ -57,15 +58,15 @@ jobs:
 
           # Restore our chunk files (keep fork version)
           for file in "${CHUNK_FILES[@]}"; do
-            if git ls-files -u | grep -q "^.*$file$"; then
+            if git ls-files -u -- "$file" | grep -q "^"; then
               echo "Keeping fork version of: $file"
-              git checkout --ours "$file"
+              git checkout --ours "$file" 2>/dev/null
               git add "$file"
             fi
           done
 
           # Accept upstream for remaining conflicting files
-          CONFLICTS=$(git diff --name-only --diff-filter=U)
+          CONFLICTS=$(git diff --name-only --diff-filter=U 2>/dev/null)
           if [ -n "$CONFLICTS" ]; then
             for file in $CONFLICTS; do
               echo "Accepting upstream version of: $file"
@@ -74,8 +75,14 @@ jobs:
             done
           fi
 
-          git commit -m "chore: merge upstream changes and auto-resolve conflicts" --no-verify
+          # Verify no conflicts remain
+          if [ -n "$(git diff --name-only --diff-filter=U 2>/dev/null)" ]; then
+            echo "ERROR: Unresolved conflicts remaining!"
+            git status
+            exit 1
+          fi
 
+          git commit -m "chore: merge upstream changes and auto-resolve conflicts" --no-verify
           git push origin main
           echo "result=synced" >> $GITHUB_OUTPUT
 
