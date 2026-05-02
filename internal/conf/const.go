@@ -161,6 +161,10 @@ const (
 	StreamMaxClientUploadSpeed            = "max_client_upload_speed"
 	StreamMaxServerDownloadSpeed          = "max_server_download_speed"
 	StreamMaxServerUploadSpeed            = "max_server_upload_speed"
+
+	// Chunked Upload (分片上传配置，用于绕过 CDN 大小限制)
+	ChunkedUploadMode      = "chunked_upload_mode"       // 分片上传开关: auto(默认)/disabled
+	ChunkedUploadChunkSize = "chunked_upload_chunk_size" // 分片阈值(MB)，仅 auto 模式时生效
 )
 
 const (

@@ -242,6 +242,25 @@ func InitialSettings() []model.SettingItem {
 		{Key: conf.StreamMaxClientUploadSpeed, Value: "-1", Type: conf.TypeNumber, Group: model.TRAFFIC, Flag: model.PRIVATE},
 		{Key: conf.StreamMaxServerDownloadSpeed, Value: "-1", Type: conf.TypeNumber, Group: model.TRAFFIC, Flag: model.PRIVATE},
 		{Key: conf.StreamMaxServerUploadSpeed, Value: "-1", Type: conf.TypeNumber, Group: model.TRAFFIC, Flag: model.PRIVATE},
+
+		// 分片上传配置（绕过 Cloudflare CDN 上传大小限制）
+		{
+			Key:     conf.ChunkedUploadMode,
+			Value:   "auto",
+			Type:    conf.TypeSelect,
+			Options: "auto,disabled",
+			Group:   model.TRAFFIC,
+			Flag:    model.PUBLIC,
+			Help:    "Chunked upload mode. 'auto': use chunked upload when file exceeds threshold (recommended). 'disabled': always use direct upload, no chunking.",
+		},
+		{
+			Key:   conf.ChunkedUploadChunkSize,
+			Value: "95",
+			Type:  conf.TypeNumber,
+			Group: model.TRAFFIC,
+			Flag:  model.PUBLIC,
+			Help:  "Chunked upload size threshold (MB). Files larger than this value will be uploaded in chunks. Only effective in 'auto' mode. Set to 1 to chunk almost all files. Default: 95 (below Cloudflare's 100MB limit).",
+		},
 	}
 	additionalSettingItems := tool.Tools.Items()
 	// 固定顺序
