@@ -49,7 +49,7 @@ jobs:
           # Try a clean merge first
           if git merge upstream/main --no-edit 2>/dev/null; then
             echo "Merge succeeded without conflicts."
-            git push origin main
+            git push origin HEAD:refs/heads/main
             echo "result=synced" >> $GITHUB_OUTPUT
             exit 0
           fi
@@ -83,7 +83,7 @@ jobs:
           fi
 
           git commit -m "chore: merge upstream changes and auto-resolve conflicts" --no-verify
-          git push origin main
+          git push origin HEAD:refs/heads/main
           echo "result=synced" >> $GITHUB_OUTPUT
 
       - name: Sync result
